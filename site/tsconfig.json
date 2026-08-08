@@ -1,0 +1,13 @@
+{
+  // Intentionally does NOT extend ../tsconfig.base.json: Astro's virtual
+  // modules (`astro:content`, `astro:assets`, ...) require the `moduleResolution:
+  // "bundler"` + `.astro/types.d.ts` setup that ships in `astro/tsconfigs/*`.
+  // The root tsconfig's NodeNext resolution can't see those types. This still
+  // targets ES2022 + strict, matching the repo-wide TypeScript posture.
+  "extends": "astro/tsconfigs/strict",
+  "include": [".astro/types.d.ts", "**/*"],
+  "exclude": ["dist"],
+  "compilerOptions": {
+    "strict": true
+  }
+}

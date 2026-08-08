@@ -1,0 +1,75 @@
+name: docs
+
+# Builds and deploys the Starlight site under site/ to GitHub Pages.
+# Deliberately separate from check.yaml/test.yaml/release.yaml so docs can
+# ship without a full daemon-binary release — see
+# docs/specs/draft/docs-site.md and docs/specs/draft/ci-workflows.md.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - "docs/specs/live/**"
+      - ".github/workflows/docs.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Pages-specific convention (not the repo's usual ref-based group): a
+  # deploy already in flight should finish rather than be cancelled by the
+  # next push, so this always queues instead of cancelling.
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      # Same pin as check.yaml/test.yaml for consistency; installs node+yarn
+      # per the root mise.toml. `bun` isn't needed here — the docs site is
+      # a plain Astro/Node build, not the compiled daemon binary.
+      - name: Install mise and tools
+        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2
+
+      - name: Install site dependencies
+        working-directory: site
+        run: yarn install
+
+      - name: Build site
+        working-directory: site
+        run: yarn build
+
+      # TODO: verify this SHA pin (copied from the widely-published v5 tag
+      # at time of writing; unlike the checkout/mise-action pins above,
+      # this one has not been cross-checked against this repo's own CI run).
+      - name: Configure Pages
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745 # v5
+
+      # TODO: verify this SHA pin — see note above.
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719c # v3
+        with:
+          path: site/dist
+
+  deploy:
+    name: deploy
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # TODO: verify this SHA pin — see note in the build job above.
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

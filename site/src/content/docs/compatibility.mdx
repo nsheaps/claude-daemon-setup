@@ -1,0 +1,54 @@
+---
+title: Compatibility
+description: Current known-working state of claude-daemon-setup, and known limitations.
+---
+
+This project follows an explicit [build order](https://github.com/nsheaps/claude-daemon-setup/blob/main/docs/specs/draft/overview.md#build-order-do-not-reorder)
+where "installable" and "actually works end-to-end" are deliberately
+different milestones. This page tracks where things stand.
+
+:::caution
+TODO: this table is hand-maintained scaffolding and will drift. Replace with
+(or cross-check against) CI status badges once `docs/specs/draft/ci-workflows.md`
+and `docs/specs/draft/release-packaging.md` are implemented.
+:::
+
+## Platform support
+
+| Requirement | Status |
+| --- | --- |
+| macOS | Required &mdash; this project wraps `brew services` / launchd, which is macOS-only. TODO: record minimum verified macOS version once tested. |
+| Homebrew | Required, via the `nsheaps/homebrew-devsetup` tap. |
+| Architecture | `bun build --compile` targets one binary per target triple &mdash; TODO: confirm which triples ship (Apple Silicon vs Intel) once `docs/specs/draft/release-packaging.md` lands. |
+
+## Known limitations
+
+- **`CLAUDE_CONFIG_DIR` does not isolate `CLAUDE.md` memory discovery.**
+  Claude Code recurses for `CLAUDE.md` upward from the working directory
+  regardless of `CLAUDE_CONFIG_DIR`. This is a known, accepted limitation in
+  the MVP, not a bug &mdash; see `docs/specs/draft/config-isolation.md`.
+- **No rollback on a bad auto-update.** If a new binary fails its smoke
+  check, the daemon logs and continues running the old process; there is no
+  automatic revert of the installed binary in the MVP &mdash; see
+  `docs/specs/draft/auto-update.md`.
+- **Per-agent `gh`/`git` isolation is untested.** Whether Claude Code honors
+  `GIT_AUTHOR_*` env vars or requires an explicit `--author` flag has not
+  been verified yet.
+
+## Build-order status
+
+Per `docs/specs/draft/overview.md`, roughly in order:
+
+1. Specs &mdash; drafted, refined per phase.
+2. CI workflow scaffold.
+3. Project scaffold (mise/direnv/nx/bun).
+4. Build/test/release/publish pipeline + brew formula.
+5. Service wiring (`brew services start` succeeds; daemon logic may still
+   crash &mdash; expected at this checkpoint).
+6. Config isolation, settings-repo sync, skills symlink, remote-control
+   invocation, auto-update loop.
+7. This docs site + `daemon-agent-template` + org registration.
+
+TODO: turn this list into a live status table (done/in-progress/pending) once
+there's a mechanism to keep it in sync with actual repo state, rather than
+duplicating `docs/specs/draft/overview.md` by hand.

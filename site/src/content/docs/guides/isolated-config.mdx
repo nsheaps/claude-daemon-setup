@@ -1,0 +1,55 @@
+---
+title: Understanding the isolated config root
+description: Why claude-daemon-setup keeps its own ~/.claude-daemon/ root instead of using your normal ~/.claude.
+---
+
+The daemon never runs against your interactive `~/.claude` setup. Instead,
+everything it needs lives under an isolated root, `~/.claude-daemon/`. This
+guide covers why, and what that isolation does and doesn't cover today.
+
+## The isolated root
+
+| Variable | Value | Notes |
+| --- | --- | --- |
+| `CLAUDE_CONFIG_DIR` | `~/.claude-daemon/claude` | The one proven isolation mechanism. |
+| `CLAUDE_HOME` | `~/.claude-daemon/claude` | Same path, kept in sync so existing `claude-utils` tooling agrees on where "home" is. |
+| `GH_CONFIG_DIR` | `~/.claude-daemon/gh` | No org precedent for this; narrower than `XDG_CONFIG_HOME`. |
+| `GIT_CONFIG_GLOBAL` | `~/.claude-daemon/gitconfig` | Keeps daemon git config out of your real `~/.gitconfig`. |
+
+Notably **not** set: `HOME`, any `XDG_*` variable, or `GIT_COMMITTER_*`. See
+`docs/research/patterns-config-isolation.md` for the full research behind
+this list and `docs/specs/draft/config-isolation.md` for the resolved
+design.
+
+The daemon also runs Claude Code with:
+
+```sh
+claude --setting-sources project,local
+```
+
+which pairs with `CLAUDE_CONFIG_DIR` &mdash; neither alone is sufficient to
+get full isolation.
+
+## What isolation does *not* cover
+
+:::caution
+`CLAUDE_CONFIG_DIR` does **not** isolate `CLAUDE.md` memory discovery.
+Claude Code recurses for `CLAUDE.md` files upward from the current working
+directory regardless of `CLAUDE_CONFIG_DIR`. If the daemon's working
+directory has a `CLAUDE.md` (or an ancestor directory does), it will be
+picked up. This is a known limitation accepted for the MVP, not something
+this project currently works around &mdash; see
+`docs/specs/draft/config-isolation.md`.
+:::
+
+## Where config comes from
+
+The isolated root is *populated*, not hand-edited: skills, agents, and
+rules are synced in from your `CLAUDE_DAEMON_SETTINGS_REPO` (your fork of
+`daemon-agent-template`). See `docs/specs/draft/settings-repo-sync.md` for
+the sync mechanism, and [contributing](/claude-daemon-setup/contributing/)
+for how the two repos relate.
+
+TODO: once the sync mechanism (build-order step 6) actually exists, expand
+this guide with a worked example of what the symlink farm under
+`~/.claude-daemon/` looks like after a sync.

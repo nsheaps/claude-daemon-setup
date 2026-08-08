@@ -1,0 +1,37 @@
+---
+title: CLI reference
+description: Command-line reference for the claude-daemon-setup binary.
+---
+
+:::caution[Stub — generated content pending]
+TODO: this page must be **generated from `claude-daemon-setup --help`
+output**, not hand-maintained, to avoid drift between the binary and these
+docs (per `docs/specs/draft/docs-site.md`: "CLI reference (generated from
+`--help` output, not hand-maintained — avoid drift)").
+
+Nothing generates this yet. Options once the CLI exists (`src/cli.ts`,
+build-order steps 3-6):
+
+- A small script (e.g. `scripts/gen-cli-docs.ts`) run in `mise run` /
+  `docs.yaml` CI that shells out to `--help` for the root command and each
+  subcommand, and writes this file (or a set of `guides/cli/*.mdx` files).
+- A `starlight-typedoc`-style build step, if the CLI ends up documented via
+  TSDoc instead of a hand-rolled `--help` walker.
+
+Until then, this page is a placeholder so the sidebar entry and route exist.
+:::
+
+## Expected shape
+
+Based on `docs/specs/draft/overview.md` and `docs/specs/draft/daemon-service.md`,
+the binary is expected to expose at least:
+
+```
+claude-daemon-setup setup     # interactive first-run configuration
+claude-daemon-setup start     # foreground start (brew services wraps this)
+claude-daemon-setup status    # report current daemon/session state
+claude-daemon-setup update    # force an out-of-band update check
+```
+
+TODO: replace this hand-written list with the generated output as soon as
+`src/cli.ts` exists and has a `--help` implementation.

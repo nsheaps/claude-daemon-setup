@@ -1,0 +1,58 @@
+---
+title: Contributing
+description: How to work on claude-daemon-setup itself, and how it relates to the settings-repo/template split.
+---
+
+## Two different repos, two different jobs
+
+This repo (`claude-daemon-setup`) owns the **daemon and its packaging**:
+the binary, the Homebrew formula, the service wiring, config isolation, and
+the settings-repo sync mechanism itself.
+
+Your own fork of
+[`nsheaps/daemon-agent-template`](https://github.com/nsheaps/daemon-agent-template)
+owns **what the daemon runs as**: skills, agents, rules, and `agent.yaml`.
+If you're trying to change what the agent does, you almost certainly want
+that repo, not this one. See `docs/specs/draft/daemon-agent-template.md`.
+
+## Local setup
+
+```sh
+mise run setup   # yarn install
+mise run check   # lint + fmt-check + test, same as CI
+```
+
+See `mise.toml` at the repo root for the full task list, and
+`docs/research/patterns-tooling.md` for where these conventions come from.
+
+## Docs site (this site)
+
+The site lives in `site/` and is a separate [Starlight](https://starlight.astro.build/)
+project with its own `package.json`:
+
+```sh
+cd site
+yarn install
+yarn dev       # local preview
+yarn build     # production build (what CI runs)
+```
+
+Content sources, per `docs/specs/draft/docs-site.md`:
+
+- `site/src/content/docs/**` &mdash; site-only pages (getting started,
+  install, guides, this page, ...).
+- `docs/specs/live/**` &mdash; specs that have been promoted out of
+  `draft/`/`in-progress/` get surfaced here too, once that promotion
+  workflow exists. **Draft, in-progress, and research docs are never
+  published** &mdash; internal only until they're moved to `live/`.
+
+Publishing is a separate workflow, `.github/workflows/docs.yaml`, triggered
+on pushes to `main` touching `site/**` or `docs/specs/live/**`, independent
+of the binary release pipeline so docs can ship without a full release.
+
+## Spec-driven changes
+
+Non-trivial changes should start from (or update) a spec under
+`docs/specs/{draft,reviewed,in-progress,live,deprecated,archive}/` before
+code lands &mdash; see `docs/specs/draft/overview.md` for the current spec
+graph and the build order this project follows.

@@ -1,0 +1,55 @@
+---
+title: Install
+description: Installing claude-daemon-setup via Homebrew.
+---
+
+`claude-daemon-setup` ships as a compiled `bun` binary attached to GitHub
+releases. It is **not** a new Homebrew tap &mdash; it's one more formula in
+the existing [`nsheaps/homebrew-devsetup`](https://github.com/nsheaps/homebrew-devsetup)
+tap. See `docs/specs/draft/release-packaging.md` for the packaging design.
+
+## Add the tap (if you haven't already)
+
+```sh
+brew tap nsheaps/devsetup
+```
+
+## Install
+
+```sh
+brew install claude-daemon-setup
+```
+
+:::caution
+TODO: this formula has not shipped yet (build-order step 4). This page
+documents the intended install UX ahead of the release pipeline landing.
+:::
+
+## What gets installed
+
+- The `claude-daemon-setup` binary (`bin.install Dir['bin/*']` per the house
+  formula shape).
+- A `brew services` entry / launchd `service do` block &mdash; see
+  `docs/specs/draft/daemon-service.md`. Zero precedent for this exists
+  elsewhere in `nsheaps/*`; it's genuinely new.
+- Nothing under `~/.claude` is touched. All state lives under
+  `~/.claude-daemon/` &mdash; see
+  [compatibility](/claude-daemon-setup/compatibility/) and
+  `docs/specs/draft/config-isolation.md`.
+
+## Interactive setup
+
+Any interactive configuration (e.g. picking your settings repo) happens via
+a `claude-daemon-setup setup` subcommand, never inside Homebrew's
+`def install` &mdash; consistent with how other `nsheaps` formulae handle
+interactive steps (advertised via `caveats`, not run at install time).
+
+## Upgrading
+
+Once running, the service checks for and applies updates on an interval by
+itself &mdash; see `docs/specs/draft/auto-update.md`. Manual upgrades still
+work the normal Homebrew way:
+
+```sh
+brew upgrade claude-daemon-setup
+```

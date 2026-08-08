@@ -1,0 +1,48 @@
+---
+title: claude-daemon-setup
+description: Turn a Mac into a temporary Claude Code Remote Control host via a Homebrew service.
+template: splash
+hero:
+  tagline: Turn any Mac into a temporary Claude Code Remote Control host, via brew services.
+  actions:
+    - text: Get started
+      link: /claude-daemon-setup/getting-started/
+      icon: right-arrow
+      variant: primary
+    - text: Install
+      link: /claude-daemon-setup/install/
+      icon: down-caret
+---
+
+import { Card, CardGrid } from "@astrojs/starlight/components";
+
+`claude-daemon-setup` runs [Claude Code](https://code.claude.com) as a
+background Homebrew service, with its own isolated config root at
+`~/.claude-daemon/` so it never touches your interactive `~/.claude` setup.
+
+<CardGrid stagger>
+  <Card title="Isolated by default" icon="seti:lock">
+    Config, skills, agents, and rules are synced from your own settings repo
+    into `~/.claude-daemon/`, kept separate from your interactive Claude Code
+    setup.
+  </Card>
+  <Card title="A Homebrew service" icon="seti:shell">
+    Installed via the `nsheaps/devsetup` tap and managed with
+    `brew services`, no manual launchd wrangling.
+  </Card>
+  <Card title="Self-updating" icon="rocket">
+    Checks for and applies updates on an interval once running &mdash; no
+    interactive `gum confirm` required.
+  </Card>
+  <Card title="Early and evolving" icon="warning">
+    This project is still working through its build order &mdash; see the
+    [compatibility](/claude-daemon-setup/compatibility/) page for current
+    status before relying on it.
+  </Card>
+</CardGrid>
+
+:::caution[Status]
+This is early scaffolding. Service start succeeding does not yet mean the
+daemon logic itself works end-to-end &mdash; see
+[compatibility](/claude-daemon-setup/compatibility/).
+:::

@@ -1,0 +1,63 @@
+---
+title: Getting started
+description: The shortest path from zero to a running claude-daemon-setup service.
+---
+
+import { Steps } from "@astrojs/starlight/components";
+
+:::note
+This page describes the intended end-to-end flow. Parts of it depend on
+work that hasn't landed yet &mdash; see
+[compatibility](/claude-daemon-setup/compatibility/) for what actually works
+today. TODO: strike this note once the daemon logic (build-order step 6) is
+in and the flow below is verified against a real install.
+:::
+
+<Steps>
+
+1. **Fork the settings template.** Create your own copy of
+   [`nsheaps/daemon-agent-template`](https://github.com/nsheaps/daemon-agent-template)
+   &mdash; this is where your skills, agents, rules, and `agent.yaml` live.
+   See [contributing](/claude-daemon-setup/contributing/) for what belongs in
+   that repo versus this one.
+
+2. **Install the service.** Follow [install](/claude-daemon-setup/install/)
+   to add the tap and install the formula.
+
+3. **Point it at your settings repo.**
+
+   ```sh
+   export CLAUDE_DAEMON_SETTINGS_REPO="github.com/<you>/daemon-agent-template"
+   ```
+
+   TODO: confirm the final env var name / config file mechanism once
+   [[settings-repo-sync]] is implemented (`docs/specs/draft/settings-repo-sync.md`).
+
+4. **Start the service.**
+
+   ```sh
+   brew services start claude-daemon-setup
+   ```
+
+   The service name comes from your settings repo's `agent.yaml` →
+   `agent.name` &mdash; see [[settings-repo-sync]] for how that mapping
+   works.
+
+5. **Check it's alive.**
+
+   ```sh
+   brew services list
+   ```
+
+   At this build-order checkpoint the process is allowed to be running but
+   still crash-looping on daemon logic; that's a known, expected state until
+   build-order step 6 lands.
+
+</Steps>
+
+## Next steps
+
+- [Compatibility](/claude-daemon-setup/compatibility/) &mdash; what's
+  actually verified to work, and on which macOS/Homebrew versions.
+- [CLI reference](/claude-daemon-setup/cli-reference/) &mdash; full command
+  surface.
