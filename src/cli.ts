@@ -50,6 +50,18 @@ async function main(): Promise<void> {
     case "service":
       await runService();
       return;
+    case "--version":
+    case "-v":
+      // Required by src/lib/auto-update.ts's smokeCheckBinary() and the
+      // Formula's `test do` block — both gate on this exiting 0.
+      console.log(readOwnVersion());
+      process.exit(0);
+      return;
+    case "--help":
+    case "-h":
+      printUsage();
+      process.exit(0);
+      return;
     default:
       printUsage();
       process.exit(subcommand ? 1 : 0);
@@ -57,7 +69,7 @@ async function main(): Promise<void> {
 }
 
 function printUsage(): void {
-  console.error("usage: claude-daemon <setup|service>");
+  console.error("usage: claude-daemon <setup|service|--version|--help>");
 }
 
 // ---------------------------------------------------------------------------
