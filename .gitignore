@@ -1,0 +1,13 @@
+node_modules/
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+dist/
+.mise.local.toml
+*.log
+
+# generated symlink farm — see docs/specs/draft/settings-repo-sync.md
+.claude-daemon/

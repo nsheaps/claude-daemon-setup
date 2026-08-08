@@ -1,0 +1,33 @@
+# Prerequisites:
+#   - mise: https://mise.run
+# Usage:
+#   mise run          # Show available tasks
+#   mise run setup    # Install dependencies
+#   mise run check    # Run all checks (CI equivalent)
+
+[tools]
+node = "lts"
+yarn = "4"
+bun = "latest"
+
+[tasks.setup]
+run = "yarn install"
+
+[tasks.lint]
+run = "yarn eslint src/"
+
+[tasks.fmt]
+run = "yarn eslint src/ --fix"
+
+[tasks.fmt-check]
+run = "yarn eslint src/"
+
+[tasks.test]
+run = "bun test"
+
+[tasks.build]
+run = "bun build --compile --outfile dist/claude-daemon src/cli.ts"
+
+[tasks.check]
+depends = ["lint", "fmt-check", "test"]
+run = "echo 'All checks passed'"
