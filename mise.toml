@@ -14,12 +14,15 @@ bun = "latest"
 run = "yarn install"
 
 [tasks.lint]
+depends = ["setup"]
 run = "yarn eslint src/"
 
 [tasks.fmt]
+depends = ["setup"]
 run = "yarn eslint src/ --fix"
 
 [tasks.fmt-check]
+depends = ["setup"]
 run = "yarn eslint src/"
 
 [tasks.test]
