@@ -5,17 +5,18 @@ name: release
 #
 # See docs/specs/draft/release-packaging.md and docs/research/patterns-brew-formula.md.
 #
-# SCAFFOLD NOTE: this workflow assumes two files that don't exist in this repo
-# yet — `.release-it.json` (release-it config, see docs/research/patterns-ci-release.md
-# for the claude-utils shape to copy) and `Formula/claude-daemon.rb.gotmpl`
-# (see docs/specs/draft/release-packaging.md for the formula shape). Both are
-# tracked under the "build/test/release/publish pipeline + brew formula" step.
-# Expect this workflow to fail end-to-end until those land — that's fine at
-# the CI-scaffold checkpoint.
+# manual-dispatch-only (NOT push:[main]): once AUTOMATION_GITHUB_APP_* secrets
+# were synced onto this repo (2026-08-08, see nsheaps/.github#197), this
+# workflow started firing for real on every push. It got as far as tagging +
+# pushing v0.0.1 (see CHANGELOG.md / git tag v0.0.1) before release-it's
+# `GitHub create release` step threw `Cannot read properties of null
+# (reading 'debug')` — a release-it/GitHub-plugin bug, not something wrong
+# with this repo's config. Releasing on every commit isn't the intended
+# behavior anyway (semantic releases should be deliberate) — gated to manual
+# dispatch until that bug is diagnosed/fixed AND cutting real releases is
+# actually wanted.
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch: {}
 
 concurrency:
