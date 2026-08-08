@@ -1,0 +1,96 @@
+# typed: false
+# frozen_string_literal: true
+
+# Rendered by `gomplate -f Formula/claude-daemon.rb.gotmpl -o homebrew-devsetup/Formula/claude-daemon.rb`
+# with env `Tag` / `SHA256_ARM64` / `SHA256_X64` set by the release workflow, per
+# docs/specs/draft/release-packaging.md and docs/research/patterns-brew-formula.md.
+#
+# This formula deviates from the house style (see patterns-brew-formula.md) in ways that
+# are all *intentional and explicitly requested*, not oversights:
+#   1. `url`/`sha256` point at compiled per-arch binaries attached to the GitHub release,
+#      not the auto-generated source tarball — the whole point of this tool is a
+#      self-contained daemon binary with no runtime bun/node dependency on the target mac.
+#   2. `service do` — no precedent anywhere in nsheaps/homebrew-devsetup (patterns-index.md
+#      gap #6). This is the daemon's brew-services wiring.
+#   3. `post_install` runs `setup` (interactive) and starts the service automatically.
+#      Both are against normal Homebrew convention (post_install should not be interactive;
+#      `brew services start` is normally left to the user) — see docs/specs/draft/daemon-service.md:
+#      "installed against best-practice: enabled to run at login automatically on `brew install`,
+#      per explicit user instruction."
+
+class ClaudeDaemon < Formula
+  desc 'Runs Claude Code Remote Control as a background brew service'
+  homepage 'https://github.com/nsheaps/claude-daemon-setup'
+  license 'MIT'
+
+  on_macos do
+    on_arm do
+      url "https://github.com/nsheaps/claude-daemon-setup/releases/download/{{ .Env.Tag }}/claude-daemon-darwin-arm64"
+      sha256 '{{ .Env.SHA256_ARM64 }}'
+    end
+
+    on_intel do
+      url "https://github.com/nsheaps/claude-daemon-setup/releases/download/{{ .Env.Tag }}/claude-daemon-darwin-x64"
+      sha256 '{{ .Env.SHA256_X64 }}'
+    end
+  end
+
+  # No `head do` block: there is no source build for this formula (see deviation #1
+  # above) — `main` HEAD has no corresponding compiled asset to install.
+
+  def install
+    # Compiled standalone binary (bun build --compile) — no build step, just install it
+    # under the fixed name `claude-daemon` regardless of which arch asset we fetched.
+    if Hardware::CPU.arm?
+      bin.install 'claude-daemon-darwin-arm64' => 'claude-daemon'
+    else
+      bin.install 'claude-daemon-darwin-x64' => 'claude-daemon'
+    end
+  end
+
+  service do
+    run [opt_bin/'claude-daemon', 'service']
+    keep_alive true
+    log_path File.expand_path('~/.claude-daemon/logs/service.log')
+    error_log_path File.expand_path('~/.claude-daemon/logs/service.error.log')
+    # Deliberately empty: env comes from the launchd plist written by `claude-daemon setup`
+    # (CLAUDE_DAEMON_SETTINGS_REPO, CLAUDE_CONFIG_DIR, etc.), not from the formula.
+    # See docs/specs/draft/config-isolation.md and docs/specs/draft/daemon-service.md.
+    environment_variables({})
+  end
+
+  def post_install
+    # AGAINST HOMEBREW CONVENTION, INTENTIONALLY: post_install is normally expected to be
+    # non-interactive, and starting a service is normally left to the user. Both rules are
+    # broken here on explicit user request (docs/specs/draft/daemon-service.md) so that
+    # `brew install claude-daemon` alone is sufficient to end up with a running daemon.
+    #
+    # TODO(release-packaging): confirm `setup`'s interactive prompts behave sanely when
+    # driven from `brew install`'s captured-stdout context before this ships for real.
+    system "#{bin}/claude-daemon", 'setup'
+    system 'brew', 'services', 'start', 'claude-daemon'
+  end
+
+  def caveats
+    <<~EOS
+      claude-daemon was configured via `claude-daemon setup` and started as a
+      brew service automatically (see the formula's post_install — this is
+      intentionally non-standard, not a bug).
+
+      Logs:
+        ~/.claude-daemon/logs/service.log
+        ~/.claude-daemon/logs/service.error.log
+
+      To reconfigure:
+        claude-daemon setup
+
+      To stop/start manually:
+        brew services stop claude-daemon
+        brew services start claude-daemon
+    EOS
+  end
+
+  test do
+    assert_match 'claude-daemon', shell_output("#{bin}/claude-daemon --help 2>&1", 1)
+  end
+end
