@@ -14,13 +14,19 @@
 
 ## build order (do not reorder)
 
-1. specs (this doc graph) — draft now, refine after each phase.
-2. CI workflow scaffold — empty checks that at least run.
-3. project scaffold — mise/direnv/nx/bun, no daemon logic yet.
-4. build/test/release/publish pipeline + brew formula — installable.
-5. service wiring — `brew services start` succeeds at the process-supervision level; daemon logic itself may still crash. That crash is expected and OK at this checkpoint.
-6. the minutiae — config isolation, settings-repo sync, skills symlink mechanism, remote-control invocation, auto-update loop. Only now does the daemon actually work.
-7. docs site + daemon-agent-template + org registration, in parallel with step 6 once step 5 is stable.
+1. ✅ specs (this doc graph) — draft now, refine after each phase.
+2. ✅ CI workflow scaffold — check/test/release/docs workflows written; release.yaml not yet runnable end-to-end (depends on a real tagged release).
+3. ✅ project scaffold — mise/direnv/yarn/tsconfig/eslint/bun, no daemon logic yet.
+4. ✅ build/test/release/publish pipeline + brew formula — `Formula/claude-daemon.rb.gotmpl`, `.release-it.json` written; formula not yet rendered/published to `nsheaps/homebrew-devsetup` (needs a real tag).
+5. ✅ service wiring, MVP checkpoint verified locally: `bun build --compile` produces a working binary; `--version`/`--help` exit 0; `service` exits 1 with a clear, documented error when `CLAUDE_DAEMON_SETTINGS_REPO` is unset. Real `brew install`/`brew services start` deliberately not run — the formula isn't published yet, and doing so would mutate this host's real Homebrew/launchd state and the shared tap.
+6. ✅ the minutiae — `src/lib/{config-isolation,settings-repo-sync,remote-control,auto-update}.ts` written and typecheck clean. Known open gaps (not yet resolved, tracked in-code as TODOs):
+   - auto-update's binary download/swap step detects a newer release but does not yet download/swap it — blocked on finalizing per-arch release asset naming.
+   - the `GIT_AUTHOR_*` question from [[config-isolation]] is still untested.
+   - `remote-control.ts` uses `--setting-sources project,local` per spec, but the only *live-verified* workaround on this host used `project` alone (no `,local`) — flagged for re-verification before relying on it.
+   - `setup` does not yet prompt for/confirm `gh auth login` or `claude auth login`.
+7. ✅ docs site (Starlight, `site/`) + `daemon-agent-template` (scaffolded, pushed, marked as a GitHub template repo) + org registration ([nsheaps/.github#197](https://github.com/nsheaps/.github/pull/197), open).
+
+Not yet done, deliberately deferred beyond this scaffolding pass: cutting a real tagged release, publishing the formula, and an actual `brew install` end-to-end test — each mutates shared/external state (a GitHub release, the `homebrew-devsetup` tap, this host's launchd) and belongs to a follow-up pass with the user present, not an unattended scaffold.
 
 ## explicit resolutions to research gaps
 
