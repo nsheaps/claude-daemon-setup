@@ -12,12 +12,14 @@
  */
 
 import { createInterface } from "node:readline/promises";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   DAEMON_ROOT,
   buildIsolatedEnv,
   ensureIsolatedDirs,
+  mergeIsolatedEnv,
   seedGitIdentity,
 } from "./lib/config-isolation.js";
 import {
@@ -27,18 +29,23 @@ import {
   syncSymlinkFarm,
   launchdLabel,
 } from "./lib/settings-repo-sync.js";
+import { syncBundledSkills } from "./lib/bundled-skills.js";
 import { spawnRemoteControl } from "./lib/remote-control.js";
 import { startAutoUpdateLoop } from "./lib/auto-update.js";
 
 const CONFIG_FILE = join(DAEMON_ROOT, "config.json");
 
-// TODO(config-isolation.md): setup should also resolve/record the gh-auth
-// path chosen ("gh auth login" vs inherited GH_TOKEN — spec requires exactly
-// one) and confirm `claude auth login` has been run. Neither is implemented
-// in this scaffold; both are interactive, TTY-only steps that belong here.
 interface DaemonConfig {
   settingsRepo: string;
 }
+
+// Individual setup steps live as their own context:fork skills under
+// .claude/skills/ in this repo (see docs/specs/draft/config-isolation.md
+// "Setup skills") rather than being inlined here — each is independently
+// testable/invocable and forks into an isolated context so the credential
+// flow (browser OAuth, 1Password web console steps, etc.) doesn't bloat the
+// setup session's own context.
+const SETUP_SKILLS = ["claude-login-setup", "git-credentials-setup", "1password-vault-setup"] as const;
 
 async function main(): Promise<void> {
   const subcommand = process.argv[2];
@@ -78,30 +85,63 @@ function printUsage(): void {
 
 async function runSetup(): Promise<void> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
+  let settingsRepo: string | undefined;
   try {
     const existing = readConfig();
     const answer = await rl.question(
       `CLAUDE_DAEMON_SETTINGS_REPO${existing ? ` [${existing.settingsRepo}]` : ""}: `,
     );
-    const settingsRepo = answer.trim() || existing?.settingsRepo;
+    settingsRepo = answer.trim() || existing?.settingsRepo;
     if (!settingsRepo) {
       console.error("A settings repo (owner/repo or git URL) is required.");
       process.exit(1);
     }
-
-    // TODO: also prompt for/confirm gh auth and `claude auth login` here
-    // (interactive, setup-time-only per config-isolation.md). Not implemented.
-
-    const config: DaemonConfig = { settingsRepo };
-    mkdirSync(DAEMON_ROOT, { recursive: true });
-    writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2) + "\n", "utf8");
-    console.error(`Wrote ${CONFIG_FILE}`);
-
-    // TODO(daemon-service.md): post_install also needs this written into the
-    // launchd plist's EnvironmentVariables (service has no shell profile) —
-    // that's release-packaging.md's scope, flagging the seam here.
   } finally {
     rl.close();
+  }
+
+  const config: DaemonConfig = { settingsRepo };
+  mkdirSync(DAEMON_ROOT, { recursive: true });
+  writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2) + "\n", "utf8");
+  console.error(`Wrote ${CONFIG_FILE}`);
+
+  // TODO(daemon-service.md): post_install also needs this written into the
+  // launchd plist's EnvironmentVariables (service has no shell profile) —
+  // that's release-packaging.md's scope, flagging the seam here.
+
+  const isolatedEnv = buildIsolatedEnv();
+  ensureIsolatedDirs(isolatedEnv);
+  seedGitIdentity(isolatedEnv);
+  syncBundledSkills(isolatedEnv.CLAUDE_CONFIG_DIR);
+
+  console.error(
+    "\nHanding off to an interactive claude session to run the credential " +
+      `setup skills (${SETUP_SKILLS.join(", ")}) inside the isolated ` +
+      `CLAUDE_CONFIG_DIR=${isolatedEnv.CLAUDE_CONFIG_DIR}.\n` +
+      "Each is a context:fork skill — see .claude/skills/ in this repo. " +
+      "Follow its prompts (browser login, 1Password web console steps, " +
+      "etc.) — this step is interactive and cannot be fully automated.\n",
+  );
+
+  const scratchCwd = join(DAEMON_ROOT, "scratch");
+  mkdirSync(scratchCwd, { recursive: true });
+  const setupPrompt =
+    `Run the ${SETUP_SKILLS.join(", ")} skills in order to finish configuring ` +
+    "this claude-daemon instance. Ask me for whatever input each one needs, " +
+    "and give me a short report after each skill completes.";
+
+  const result = spawnSync("claude", [setupPrompt], {
+    cwd: scratchCwd,
+    env: mergeIsolatedEnv(process.env, isolatedEnv),
+    stdio: "inherit",
+  });
+
+  if (result.status !== 0) {
+    console.error(
+      `\n[setup] the interactive claude session exited with status ${String(result.status)} ` +
+        "(or was interrupted). Re-run 'claude-daemon setup' to continue where you left off — " +
+        "the skills are idempotent (they check current state before acting).",
+    );
   }
 }
 
@@ -129,17 +169,22 @@ async function runService(): Promise<void> {
     process.exit(1);
   }
 
-  const isolatedEnv = buildIsolatedEnv();
+  let isolatedEnv = buildIsolatedEnv();
 
   try {
     // Step 3: set up ~/.claude-daemon/ isolation dirs + git identity seed.
     ensureIsolatedDirs(isolatedEnv);
     seedGitIdentity(isolatedEnv);
+    syncBundledSkills(isolatedEnv.CLAUDE_CONFIG_DIR);
 
     // Step 2: clone/sync settings repo.
     cloneOrPullSettingsRepo(settingsRepo, isolatedEnv, CONFIG_REPO_DIR);
     const agent = parseAgentYaml(CONFIG_REPO_DIR);
     console.error(`[service] agent.name=${agent.name} label=${launchdLabel(agent.name)}`);
+    // Rebuild with the real agent name now known, for CLAUDE_CODE_TASK_LIST_ID
+    // continuity across restarts — directory paths are unaffected, so the
+    // dirs set up above stay valid.
+    isolatedEnv = buildIsolatedEnv(DAEMON_ROOT, agent.name);
 
     // Step 4: sync skills/agents/rules symlink farm.
     syncSymlinkFarm(isolatedEnv.CLAUDE_CONFIG_DIR, CONFIG_REPO_DIR);

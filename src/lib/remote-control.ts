@@ -6,16 +6,16 @@
  * this process must stay running and be supervised by the caller (the
  * daemon-service entrypoint / auto-update loop), not run-to-completion.
  *
- * Verified workaround per docs/research/host-setup-notes.md §3: the global
- * settings.json's `env` block (custom ANTHROPIC_BASE_URL gateway) breaks
- * Remote Control unless user-scope settings are excluded via
- * `--setting-sources`. That doc's live verification used exactly
- * `--setting-sources project`. daemon-service.md / config-isolation.md both
- * specify `project,local`. We follow the specs here (project,local) since
- * `local` only adds project-local overrides on top of `project` and should
- * be harmless, but this delta from the verified command is flagged as a
- * TODO: re-verify `--setting-sources project,local` actually starts Remote
- * Control on this host before relying on it in production.
+ * Isolation is achieved purely via CLAUDE_CONFIG_DIR + the rest of the
+ * config-isolation.ts env map — the pattern proven in nsheaps/agents'
+ * agent-env.sh. An earlier draft of this file relied on
+ * `claude --setting-sources project,local` to dodge a custom
+ * ANTHROPIC_BASE_URL gateway leaking in from user-scope settings (see
+ * docs/research/host-setup-notes.md §3 for that original finding); that
+ * flag has been dropped. CLAUDE_CONFIG_DIR pointing at an isolated root
+ * that has never seen that gateway config achieves the same isolation
+ * without depending on a CLI flag whose exact semantics (and continued
+ * existence) aren't load-bearing to verify.
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
@@ -36,15 +36,15 @@ export interface RemoteControlOptions {
 }
 
 /**
- * Spawns `claude --setting-sources project,local remote-control` as a
- * detached-from-shell child process, returning the ChildProcess handle so
- * the caller can supervise it (wait, kill, restart on auto-update, etc).
+ * Spawns `claude remote-control` as a detached-from-shell child process
+ * inside the isolated env, returning the ChildProcess handle so the caller
+ * can supervise it (wait, kill, restart on auto-update, etc).
  *
  * Does NOT itself retry, restart, or wait — that's the entrypoint's job
  * (daemon-service.md step 5/6 + auto-update.ts).
  */
 export function spawnRemoteControl(opts: RemoteControlOptions): ChildProcess {
-  const args = ["--setting-sources", "project,local", "remote-control"];
+  const args = ["remote-control"];
 
   // TODO(settings-repo-sync.md): `claude remote-control --name "<agent.name>"`
   // does not exist on the verified install (2.1.220, see

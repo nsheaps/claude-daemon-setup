@@ -22,8 +22,8 @@
 6. ✅ the minutiae — `src/lib/{config-isolation,settings-repo-sync,remote-control,auto-update}.ts` written and typecheck clean. Known open gaps (not yet resolved, tracked in-code as TODOs):
    - auto-update's binary download/swap step detects a newer release but does not yet download/swap it — blocked on finalizing per-arch release asset naming.
    - the `GIT_AUTHOR_*` question from [[config-isolation]] is still untested.
-   - `remote-control.ts` uses `--setting-sources project,local` per spec, but the only *live-verified* workaround on this host used `project` alone (no `,local`) — flagged for re-verification before relying on it.
-   - `setup` does not yet prompt for/confirm `gh auth login` or `claude auth login`.
+   - ~~`remote-control.ts` uses `--setting-sources project,local`~~ — dropped. Isolation is now pure env vars (`CLAUDE_CONFIG_DIR` etc.), matching `nsheaps/agents`' proven `agent-env.sh` pattern, not a CLI flag. See [[config-isolation]].
+   - `setup` now hands off to an interactive `claude` session running three `context: fork` skills (`claude-login-setup`, `git-credentials-setup`, `1password-vault-setup`) — see [[config-isolation]]'s "setup skills" section. GitHub App *provisioning* and 1Password *service-account* creation are confirmed human-only, web-console steps (no CLI/API path exists) — the skills consume existing credentials/guide the human through those two steps rather than faking automation that isn't possible.
 7. ✅ docs site (Starlight, `site/`) + `daemon-agent-template` (scaffolded, pushed, marked as a GitHub template repo) + org registration ([nsheaps/.github#197](https://github.com/nsheaps/.github/pull/197), open).
 
 Not yet done, deliberately deferred beyond this scaffolding pass: cutting a real tagged release, publishing the formula, and an actual `brew install` end-to-end test — each mutates shared/external state (a GitHub release, the `homebrew-devsetup` tap, this host's launchd) and belongs to a follow-up pass with the user present, not an unattended scaffold.

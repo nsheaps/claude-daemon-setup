@@ -5,6 +5,12 @@
  * map the daemon runs every child process under, and does the one-time git
  * identity copy (user.name/user.email) from the invoking user's ~/.gitconfig
  * into the isolated $GIT_CONFIG_GLOBAL.
+ *
+ * Pattern ported from nsheaps/agents' apps/agent-cli/lib/agent-env.sh (the
+ * proven, real-world per-agent isolation mechanism) — pure env vars, no CLI
+ * flag (earlier drafts of this file referenced `claude --setting-sources
+ * project,local`; that flag does not do what config isolation needs and is
+ * NOT used anywhere in this repo).
  */
 
 import { execFileSync } from "node:child_process";
@@ -23,22 +29,50 @@ export interface IsolatedEnv {
   XDG_DATA_HOME: string;
   XDG_STATE_HOME: string;
   XDG_CACHE_HOME: string;
+  XDG_CONFIG_DIRS: string;
+  XDG_DATA_DIRS: string;
+  // Extra CLAUDE_CODE_* vars adopted from agent-env.sh, limited to ones that
+  // are directly justified for an unattended daemon session (not copied
+  // wholesale — e.g. agents' CLAUDE_AUTO_BACKGROUND_TASKS/
+  // FORCE_AUTOUPDATE_PLUGINS are agents-repo policy choices, not isolation).
+  DISABLE_AUTOUPDATER: string;
+  CLAUDE_CODE_ATTRIBUTION_HEADER: string;
+  CLAUDE_CODE_TASK_LIST_ID: string;
 }
 
 /**
  * Builds the env-var map described in config-isolation.md's "env vars the
  * service process sets" section. Deliberately does NOT set HOME or
  * GIT_COMMITTER_* — see the spec's "identity split" section.
+ *
+ * GH_CONFIG_DIR and GIT_CONFIG_GLOBAL nest under XDG_CONFIG_HOME (matching
+ * agent-env.sh: `$XDG_CONFIG_HOME/gh`, `$XDG_CONFIG_HOME/git/config`) rather
+ * than being flat siblings — apps that honor XDG find them without a
+ * per-app override, and non-XDG-aware apps (gh, git) still get the explicit
+ * var. CLAUDE_CONFIG_DIR stays a direct child of `root`, not under XDG —
+ * same as agent-env.sh's `$AGENT_HOME_DIR/.claude`.
  */
-export function buildIsolatedEnv(root: string = DAEMON_ROOT): IsolatedEnv {
+export function buildIsolatedEnv(root: string = DAEMON_ROOT, agentName?: string): IsolatedEnv {
+  const xdgConfigHome = join(root, "xdg", "config");
+  const xdgDataHome = join(root, "xdg", "data");
   return {
     CLAUDE_CONFIG_DIR: join(root, "claude"),
-    GH_CONFIG_DIR: join(root, "gh"),
-    GIT_CONFIG_GLOBAL: join(root, "gitconfig"),
-    XDG_CONFIG_HOME: join(root, "xdg", "config"),
-    XDG_DATA_HOME: join(root, "xdg", "data"),
+    GH_CONFIG_DIR: join(xdgConfigHome, "gh"),
+    GIT_CONFIG_GLOBAL: join(xdgConfigHome, "git", "config"),
+    XDG_CONFIG_HOME: xdgConfigHome,
+    XDG_DATA_HOME: xdgDataHome,
     XDG_STATE_HOME: join(root, "xdg", "state"),
     XDG_CACHE_HOME: join(root, "xdg", "cache"),
+    // Prepend so isolated config is found first, system defaults remain the
+    // fallback — per the XDG Base Directory spec (colon-separated,
+    // leftmost = highest precedence), same as agent-env.sh.
+    XDG_CONFIG_DIRS: `${xdgConfigHome}:${process.env.XDG_CONFIG_DIRS ?? "/etc/xdg"}`,
+    XDG_DATA_DIRS: `${xdgDataHome}:${process.env.XDG_DATA_DIRS ?? "/usr/local/share:/usr/share"}`,
+    DISABLE_AUTOUPDATER: "1",
+    CLAUDE_CODE_ATTRIBUTION_HEADER: "0",
+    // Pins the task list across restarts/reconnects for this agent instead
+    // of a new session UUID getting an empty task list every time.
+    CLAUDE_CODE_TASK_LIST_ID: agentName ?? "claude-daemon",
   };
 }
 
@@ -66,7 +100,7 @@ export function ensureIsolatedDirs(env: IsolatedEnv): void {
     mkdirSync(dir, { recursive: true });
   }
   // GIT_CONFIG_GLOBAL is a file path, not a dir — ensure its parent exists.
-  mkdirSync(join(DAEMON_ROOT), { recursive: true });
+  mkdirSync(join(env.GIT_CONFIG_GLOBAL, ".."), { recursive: true });
 }
 
 /**
@@ -105,7 +139,7 @@ export function seedGitIdentity(env: IsolatedEnv): void {
     );
   }
 
-  mkdirSync(join(DAEMON_ROOT), { recursive: true });
+  mkdirSync(join(env.GIT_CONFIG_GLOBAL, ".."), { recursive: true });
   // Write a minimal gitconfig by hand rather than shelling to `git config
   // --file` in a loop — keeps this readable and dependency-free.
   const lines = ["[user]"];
