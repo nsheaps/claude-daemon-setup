@@ -15,6 +15,7 @@ import { createInterface } from "node:readline/promises";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { config as loadDotenv } from "dotenv";
 import {
   DAEMON_ROOT,
   buildIsolatedEnv,
@@ -34,6 +35,14 @@ import { spawnRemoteControl } from "./lib/remote-control.js";
 import { startAutoUpdateLoop } from "./lib/auto-update.js";
 
 const CONFIG_FILE = join(DAEMON_ROOT, "config.json");
+
+// Loads ~/.claude-daemon/.env (if present) into process.env before anything
+// else runs — the place an operator drops secrets (OP_SERVICE_ACCOUNT_TOKEN,
+// GITHUB_APP_PRIVATE_KEY, etc.) for this daemon instance specifically,
+// mirroring how a human might drop a token into their own ~/.env for shell
+// use. `quiet: true` — a missing file here is the common case (nothing has
+// been configured yet), not something to warn about.
+loadDotenv({ path: join(DAEMON_ROOT, ".env"), quiet: true });
 
 interface DaemonConfig {
   settingsRepo: string;
