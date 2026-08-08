@@ -1,0 +1,34 @@
+name: check
+
+# Lint + format-check + test, mirrored from `mise run check`.
+# See docs/specs/draft/ci-workflows.md and docs/research/patterns-ci-release.md.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  # ref-based: never cancel main, always cancel superseded PR runs.
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: check
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Install mise and tools
+        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2
+
+      # `check` = depends = ["lint", "fmt-check", "test"] in mise.toml.
+      # Diff-check-only: this job MUST NOT auto-commit formatting fixes
+      # (daemon-adjacent repo, unreviewed pushes are not acceptable here).
+      - name: mise run check
+        run: mise run check

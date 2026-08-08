@@ -1,0 +1,197 @@
+name: release
+
+# Cut a release, compile per-arch binaries, attach them as GH release assets,
+# then render + PR the updated Homebrew formula into nsheaps/homebrew-devsetup.
+#
+# See docs/specs/draft/release-packaging.md and docs/research/patterns-brew-formula.md.
+#
+# SCAFFOLD NOTE: this workflow assumes two files that don't exist in this repo
+# yet — `.release-it.json` (release-it config, see docs/research/patterns-ci-release.md
+# for the claude-utils shape to copy) and `Formula/claude-daemon.rb.gotmpl`
+# (see docs/specs/draft/release-packaging.md for the formula shape). Both are
+# tracked under the "build/test/release/publish pipeline + brew formula" step.
+# Expect this workflow to fail end-to-end until those land — that's fine at
+# the CI-scaffold checkpoint.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.sha || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: release (release-it)
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.release-it.outputs.tag }}
+      version: ${{ steps.release-it.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Authenticate as GitHub App
+        id: auth
+        uses: nsheaps/github-actions/.github/actions/github-app-auth@main
+        with:
+          app-id: ${{ secrets.AUTOMATION_GITHUB_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_GITHUB_APP_PRIVATE_KEY }}
+
+      - name: Fetch tags
+        run: git fetch --tags --force
+
+      - name: Install mise and tools
+        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2
+
+      - name: Install dependencies
+        run: mise run setup
+
+      # TODO(release-packaging): requires .release-it.json — see scaffold note above.
+      - name: Release
+        id: release-it
+        run: |
+          yarn release-it --ci
+          TAG="$(git describe --tags --abbrev=0)"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+        env:
+          GITHUB_TOKEN: ${{ steps.auth.outputs.token }}
+
+  build:
+    name: build binaries
+    needs: release
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    outputs:
+      sha256-darwin-arm64: ${{ steps.shas.outputs.sha256-darwin-arm64 }}
+      sha256-darwin-x64: ${{ steps.shas.outputs.sha256-darwin-x64 }}
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+
+      - name: Install mise and tools
+        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2
+
+      - name: Install dependencies
+        run: mise run setup
+
+      # `bun build --compile` cross-compiles for both targets from one host;
+      # no per-arch runner needed. See docs/specs/draft/release-packaging.md.
+      - name: Compile darwin-arm64
+        run: bun build --compile --target=bun-darwin-arm64 --outfile dist/claude-daemon-darwin-arm64 src/cli.ts
+
+      - name: Compile darwin-x64
+        run: bun build --compile --target=bun-darwin-x64 --outfile dist/claude-daemon-darwin-x64 src/cli.ts
+
+      - name: Compute asset SHA256s
+        id: shas
+        run: |
+          echo "sha256-darwin-arm64=$(shasum -a 256 dist/claude-daemon-darwin-arm64 | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "sha256-darwin-x64=$(shasum -a 256 dist/claude-daemon-darwin-x64 | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      # softprops/action-gh-release@v2 — SHA-pinned via `gh api repos/softprops/action-gh-release/git/refs/tags/v2`.
+      - name: Attach binaries to release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          tag_name: ${{ needs.release.outputs.tag }}
+          files: |
+            dist/claude-daemon-darwin-arm64
+            dist/claude-daemon-darwin-x64
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  homebrew:
+    name: update homebrew-devsetup formula
+    needs: [release, build]
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Authenticate as GitHub App
+        id: auth
+        uses: nsheaps/github-actions/.github/actions/github-app-auth@main
+        with:
+          app-id: ${{ secrets.AUTOMATION_GITHUB_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_GITHUB_APP_PRIVATE_KEY }}
+
+      - name: Install gomplate
+        run: |
+          curl -fsSL https://github.com/hairyhenderson/gomplate/releases/latest/download/gomplate_darwin-amd64 -o /usr/local/bin/gomplate
+          chmod +x /usr/local/bin/gomplate
+
+      - name: Clone homebrew-devsetup
+        run: gh repo clone nsheaps/homebrew-devsetup
+        env:
+          GH_TOKEN: ${{ steps.auth.outputs.token }}
+
+      # TODO(release-packaging): requires Formula/claude-daemon.rb.gotmpl — see
+      # scaffold note at top of file. Per docs/specs/draft/release-packaging.md
+      # the formula's url/sha256 point at the per-arch compiled binary asset,
+      # not a source tarball, so this passes two SHA256 envs instead of one.
+      - name: Render formula
+        run: |
+          gomplate \
+            -f Formula/claude-daemon.rb.gotmpl \
+            -o homebrew-devsetup/Formula/claude-daemon.rb
+        env:
+          Tag: ${{ needs.release.outputs.tag }}
+          Version: ${{ needs.release.outputs.version }}
+          SHA256_DARWIN_ARM64: ${{ needs.build.outputs.sha256-darwin-arm64 }}
+          SHA256_DARWIN_X64: ${{ needs.build.outputs.sha256-darwin-x64 }}
+
+      - name: Close superseded formula PRs
+        working-directory: homebrew-devsetup
+        run: |
+          gh pr list --repo nsheaps/homebrew-devsetup --state open \
+            --search "chore: update claude-daemon to" --json number --jq '.[].number' \
+            | xargs -I{} gh pr close {} --repo nsheaps/homebrew-devsetup \
+              --comment "Superseded by ${VERSION} update."
+        env:
+          GH_TOKEN: ${{ steps.auth.outputs.token }}
+          VERSION: ${{ needs.release.outputs.version }}
+
+      - name: Open formula PR
+        working-directory: homebrew-devsetup
+        run: |
+          BRANCH="bump-claude-daemon-${VERSION}"
+          git push origin --delete "$BRANCH" 2>/dev/null || true
+          git checkout -b "$BRANCH"
+          git add Formula/claude-daemon.rb
+          git commit -m "chore: update claude-daemon to ${VERSION}"
+          git push origin "$BRANCH"
+          gh pr create --repo nsheaps/homebrew-devsetup --base main --head "$BRANCH" \
+            --title "chore: update claude-daemon to ${VERSION}" \
+            --body "Bumps claude-daemon to ${TAG}. https://github.com/${{ github.repository }}/releases/tag/${TAG}"
+        env:
+          GH_TOKEN: ${{ steps.auth.outputs.token }}
+          VERSION: ${{ needs.release.outputs.version }}
+          TAG: ${{ needs.release.outputs.tag }}
+
+      - name: Enable auto-merge (retry)
+        working-directory: homebrew-devsetup
+        run: |
+          PR_URL="$(gh pr view --repo nsheaps/homebrew-devsetup "bump-claude-daemon-${VERSION}" --json url --jq .url)"
+          for attempt in 1 2 3 4 5; do
+            if gh pr merge "$PR_URL" --repo nsheaps/homebrew-devsetup --auto --squash; then
+              exit 0
+            fi
+            sleep $((attempt * 10))
+          done
+          echo "::warning::auto-merge could not be enabled after 5 attempts; merge ${PR_URL} manually."
+        env:
+          GH_TOKEN: ${{ steps.auth.outputs.token }}
+          VERSION: ${{ needs.release.outputs.version }}
