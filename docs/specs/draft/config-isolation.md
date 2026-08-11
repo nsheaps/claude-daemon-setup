@@ -46,10 +46,6 @@ CLAUDE_CODE_TASK_LIST_ID=<agent.name>                  # continuity across resta
 
 These two "cannot automate" facts are load-bearing design constraints, not gaps to route around — the original request asked for "a new vault and service account via cli"; the vault half is CLI-automatable, the service-account half is not, by 1Password's own design (the token can only be displayed once, at creation, via the console).
 
-## `.env` loading
-
-`~/.claude-daemon/.env`, if present, is loaded via the `dotenv` package before anything else runs (`cli.ts`'s first statement) — the place an operator drops secrets (`OP_SERVICE_ACCOUNT_TOKEN`, `GITHUB_APP_PRIVATE_KEY`, etc.) for this daemon instance specifically. `quiet: true` — a missing file is the common/expected case, not a warning.
-
 ## packaging seam (not yet wired)
 
 `src/lib/bundled-skills.ts` resolves these three skills via `CLAUDE_DAEMON_SKILLS_DIR` (packaged-install path, not yet set by anything) with a dev-mode fallback that only works running from a checkout. [[release-packaging]]'s Formula needs to install `.claude/skills/` alongside the binary and set that env var in the launchd plist — tracked there, not solved here.

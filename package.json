@@ -24,8 +24,5 @@
     "release-it": "^17.0.0",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.0.0"
-  },
-  "dependencies": {
-    "dotenv": "^17.4.2"
   }
 }
