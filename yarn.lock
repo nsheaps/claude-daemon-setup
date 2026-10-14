@@ -435,7 +435,7 @@ __metadata:
   resolution: "@nsheaps/claude-daemon-setup@workspace:."
   dependencies:
     "@eslint/js": "npm:^10.0.1"
-    "@release-it/conventional-changelog": "npm:^12.0.0"
+    "@release-it/conventional-changelog": "npm:^12.0.2"
     "@types/bun": "npm:^1.4.2"
     "@types/node": "npm:^24.13.4"
     eslint: "npm:^10.10.0"
@@ -595,7 +595,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@release-it/conventional-changelog@npm:^12.0.0":
+"@release-it/conventional-changelog@npm:^12.0.2":
   version: 12.0.2
   resolution: "@release-it/conventional-changelog@npm:12.0.2"
   dependencies:
