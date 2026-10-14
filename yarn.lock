@@ -439,7 +439,7 @@ __metadata:
     "@types/bun": "npm:^1.4.2"
     "@types/node": "npm:^24.13.4"
     eslint: "npm:^10.10.0"
-    release-it: "npm:^21.0.2"
+    release-it: "npm:^21.0.3"
     typescript: "npm:^7.0.2"
     typescript-eslint: "npm:^8.70.0"
   bin:
@@ -2398,7 +2398,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"release-it@npm:^21.0.2":
+"release-it@npm:^21.0.3":
   version: 21.1.1
   resolution: "release-it@npm:21.1.1"
   dependencies:
