@@ -23,6 +23,6 @@
     "eslint": "^10.13.0",
     "release-it": "^21.1.1",
     "typescript": "^7.0.2",
-    "typescript-eslint": "^8.71.2"
+    "typescript-eslint": "^8.72.0"
   }
 }
